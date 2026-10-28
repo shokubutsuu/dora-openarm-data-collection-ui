@@ -23,7 +23,7 @@ import datetime
 import dora
 import json
 from collections.abc import AsyncIterable
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from fastapi.templating import Jinja2Templates
@@ -138,6 +138,23 @@ CAMERA_INPUTS = (
 
 CAMERA_TIMESTAMP_WINDOW = 60
 CAMERA_STALE_AFTER_S = 1.0
+
+# Cameras shown live to the operator. The wrist cameras are left out on
+# purpose: operators watch the scene, not the hands, and every camera shown
+# costs browser CPU on the same PC that records.
+CAMERA_VIEW_INPUTS = ("camera_ceiling", "camera_head_left", "camera_head_right")
+
+# The live view is a preview, so it is sent at a fraction of the camera rate
+# (see --camera-view-fps). 0 turns it off.
+camera_view_fps = 10.0
+
+# The newest JPEG of each viewed camera, kept as the Arrow array it arrived
+# in. It is only turned into bytes when a frame is actually sent, so storing
+# every 30 fps frame costs nothing.
+latest_frames: dict[str, pa.Array] = {}
+# Bumped on every stored frame, so a sender can tell a new frame from the
+# one it already sent.
+frame_seq: dict[str, int] = {name: 0 for name in CAMERA_VIEW_INPUTS}
 
 # dora-openarm status inputs, one per arm. The input id matches the State field
 ARM_STATUS_INPUTS = ("arm_status_right", "arm_status_left")
@@ -287,6 +304,18 @@ def _update_camera_stats(event_id: str, ts_s: float) -> None:
         ts_s,
         CAMERA_STALE_AFTER_S,
     )
+
+
+def _store_camera_frame(event_id: str, value, metadata) -> None:
+    """Keep the newest frame of a viewed camera for /cameras."""
+    if event_id not in CAMERA_VIEW_INPUTS or camera_view_fps <= 0:
+        return
+    # Every robot module sends JPEG today; anything else would need decoding,
+    # which this node deliberately does not do.
+    if metadata.get("encoding", "jpeg") not in ("jpeg", "jpg", "jpe"):
+        return
+    latest_frames[event_id] = value
+    frame_seq[event_id] += 1
 
 
 def _update_arm_health(side: str, value) -> None:
@@ -509,6 +538,7 @@ def _root(request: Request):
             "state_version": state_version,
             "manual": manual,
             "launcher_url": launcher_url,
+            "camera_view_enabled": camera_view_fps > 0,
             "launcher_session_id_json": json.dumps(os.getenv("LAUNCHER_SESSION_ID") or ""),
         },
     )
@@ -670,6 +700,35 @@ async def _arm_health() -> AsyncIterable[ServerSentEvent]:
         await asyncio.sleep(0.5)
 
 
+@app.websocket("/cameras")
+async def _cameras(websocket: WebSocket):
+    """Push each viewed camera's newest frame: its name, a newline, the JPEG.
+
+    One socket carries every camera: the page already holds five SSE
+    streams, and one MJPEG stream per camera would exhaust the browser's six
+    connections per host. Only the newest frame is ever sent, so a slow
+    browser skips frames instead of backing them up in this node, whose
+    event loop also serves the dora inputs.
+    """
+    await websocket.accept()
+    if camera_view_fps <= 0:
+        await websocket.close()
+        return
+    sent = {name: 0 for name in CAMERA_VIEW_INPUTS}
+    try:
+        while state.running:
+            for name in CAMERA_VIEW_INPUTS:
+                seq = frame_seq[name]
+                if seq == sent[name] or name not in latest_frames:
+                    continue
+                sent[name] = seq
+                jpeg = latest_frames[name].to_numpy(zero_copy_only=False).tobytes()
+                await websocket.send_bytes(name.encode() + b"\n" + jpeg)
+            await asyncio.sleep(1.0 / camera_view_fps)
+    except WebSocketDisconnect:
+        pass
+
+
 @app.post("/quit")
 async def _quit():
     launcher_notified = await _command_quit()
@@ -768,6 +827,7 @@ async def _main_dora(server):
                     event_id,
                     _event_ts_to_seconds(event["metadata"].get("timestamp")),
                 )
+                _store_camera_frame(event_id, event["value"], event["metadata"])
                 continue
             if event_id in ARM_STATUS_INPUTS:
                 value = event["value"][0].as_py()
@@ -829,6 +889,7 @@ def main():
     """Run data collection control Web application."""
     global node
     global tasks
+    global camera_view_fps
 
     parser = argparse.ArgumentParser(description="Record data as OpenArm dataset")
     parser.add_argument(
@@ -862,7 +923,14 @@ def main():
         default=os.getenv("LAUNCHER_URL", default_launcher_url),
         help=f"The desktop launcher URL to fall back to on failure ({default_launcher_url})",
     )
+    parser.add_argument(
+        "--camera-view-fps",
+        default=float(os.getenv("CAMERA_VIEW_FPS", camera_view_fps)),
+        help=f"Live camera view rate, 0 to disable ({camera_view_fps:g})",
+        type=float,
+    )
     args = parser.parse_args()
+    camera_view_fps = args.camera_view_fps
     global auto_open
     auto_open = args.auto_open
     global port

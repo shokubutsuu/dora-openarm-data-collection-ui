@@ -14,6 +14,7 @@ collection session.
 | `LAUNCHER_URL` | `--launcher-url` | Desktop launcher to fall back to when this dataflow dies (default `http://127.0.0.1:8080/`) |
 | `PORT` | `--port` | Port of this UI (default `8000`) |
 | `AUTO_OPEN` | `--auto-open` | Open a Web browser on start |
+| `CAMERA_VIEW_FPS` | `--camera-view-fps` | Rate of the live camera view (default `10`, `0` turns it off) |
 
 Tasks in the metadata may carry `prompt_ja` and `description_ja`. They are shown
 instead of `prompt` / `description`, which stay in English because the recorder
@@ -29,6 +30,17 @@ sections:
     bullets: ["...", "..."]   # unnumbered
     note: "..."               # highlighted warning
 ```
+
+## Live camera view
+
+The task screen shows the `camera_ceiling`, `camera_head_left` and
+`camera_head_right` inputs live, between the episode buttons and the motor
+panel. The wrist cameras only get their rate rows: operators watch the scene,
+not the hands.
+
+Frames must be JPEG (`encoding` metadata `jpeg`, or none). They are forwarded
+as they are over one WebSocket (`/cameras`), newest frame only, at
+`CAMERA_VIEW_FPS`. The page closes the socket while its tab is hidden.
 
 ## Errors
 
