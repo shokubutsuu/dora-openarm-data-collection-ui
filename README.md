@@ -33,14 +33,17 @@ sections:
 
 ## Live camera view
 
-The task screen shows the `camera_ceiling`, `camera_head_left` and
-`camera_head_right` inputs live, between the episode buttons and the motor
-panel. The wrist cameras only get their rate rows: operators watch the scene,
-not the hands.
+The task screen shows the cameras live next to the task: `camera_ceiling`
+always, and below it either the head pair (`camera_head_left`,
+`camera_head_right`) or the wrist pair (`camera_wrist_left`,
+`camera_wrist_right`), picked with the 頭部 / 手首 tabs. A tab shows ⚠ when
+a camera of its pair stops, even while the other pair is on screen. A tile
+shows 映像なし once its camera has sent nothing for 2 s.
 
 Frames must be JPEG (`encoding` metadata `jpeg`, or none). They are forwarded
-as they are over one WebSocket (`/cameras`), newest frame only, at
-`CAMERA_VIEW_FPS`. The page closes the socket while its tab is hidden.
+as they are over one WebSocket (`/cameras?group=head|wrist`), newest frame
+only, at `CAMERA_VIEW_FPS`. Only the ceiling and the picked pair are sent, and
+the page closes the socket while its tab is hidden.
 
 ## Errors
 

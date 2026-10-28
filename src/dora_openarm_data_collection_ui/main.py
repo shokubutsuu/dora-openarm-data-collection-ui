@@ -139,10 +139,19 @@ CAMERA_INPUTS = (
 CAMERA_TIMESTAMP_WINDOW = 60
 CAMERA_STALE_AFTER_S = 1.0
 
-# Cameras shown live to the operator. The wrist cameras are left out on
-# purpose: operators watch the scene, not the hands, and every camera shown
-# costs browser CPU on the same PC that records.
-CAMERA_VIEW_INPUTS = ("camera_ceiling", "camera_head_left", "camera_head_right")
+# Cameras shown live to the operator. The ceiling is always shown; below it
+# the operator picks one pair with a tab. Only the ceiling and the picked
+# pair are sent, since every camera shown costs browser CPU on the same PC
+# that records.
+CAMERA_VIEW_ALWAYS = ("camera_ceiling",)
+CAMERA_VIEW_GROUPS = {
+    "head": ("camera_head_left", "camera_head_right"),
+    "wrist": ("camera_wrist_left", "camera_wrist_right"),
+}
+CAMERA_VIEW_DEFAULT_GROUP = "head"
+CAMERA_VIEW_INPUTS = CAMERA_VIEW_ALWAYS + tuple(
+    name for group in CAMERA_VIEW_GROUPS.values() for name in group
+)
 
 # The live view is a preview, so it is sent at a fraction of the camera rate
 # (see --camera-view-fps). 0 turns it off.
@@ -567,6 +576,8 @@ def _root(request: Request):
             # Rendered into the tiles so that the reload after every state
             # change (an arm starting, say) keeps them as they were.
             "camera_view_status": _camera_view_status(),
+            "camera_view_groups": CAMERA_VIEW_GROUPS,
+            "camera_view_default_group": CAMERA_VIEW_DEFAULT_GROUP,
             "launcher_session_id_json": json.dumps(os.getenv("LAUNCHER_SESSION_ID") or ""),
         },
     )
@@ -732,9 +743,14 @@ async def _arm_health() -> AsyncIterable[ServerSentEvent]:
 async def _cameras(websocket: WebSocket):
     """Push each viewed camera's newest frame and whether it is live.
 
+    `?group=` picks the pair sent besides the ceiling (CAMERA_VIEW_GROUPS);
+    the page reconnects when the operator switches tabs.
+
     Frames are binary messages: the camera's name, a newline, the JPEG.
     Every CAMERA_VIEW_STATUS_INTERVAL_S a text message carries
-    _camera_view_status() as JSON; it alone decides 映像なし.
+    _camera_view_status() as JSON for every camera, including the pair not
+    shown, so the other tab can warn about a dead camera; it alone decides
+    映像なし.
 
     One socket carries every camera: the page already holds five SSE
     streams, and one MJPEG stream per camera would exhaust the browser's six
@@ -746,7 +762,11 @@ async def _cameras(websocket: WebSocket):
     if camera_view_fps <= 0:
         await websocket.close()
         return
-    sent = {name: 0 for name in CAMERA_VIEW_INPUTS}
+    group = websocket.query_params.get("group", CAMERA_VIEW_DEFAULT_GROUP)
+    names = CAMERA_VIEW_ALWAYS + CAMERA_VIEW_GROUPS.get(
+        group, CAMERA_VIEW_GROUPS[CAMERA_VIEW_DEFAULT_GROUP]
+    )
+    sent = {name: 0 for name in names}
     status_sent_at = 0.0
     try:
         while state.running:
@@ -754,7 +774,7 @@ async def _cameras(websocket: WebSocket):
             if now - status_sent_at >= CAMERA_VIEW_STATUS_INTERVAL_S:
                 status_sent_at = now
                 await websocket.send_text(json.dumps(_camera_view_status()))
-            for name in CAMERA_VIEW_INPUTS:
+            for name in names:
                 seq = frame_seq[name]
                 if seq == sent[name] or name not in latest_frames:
                     continue
