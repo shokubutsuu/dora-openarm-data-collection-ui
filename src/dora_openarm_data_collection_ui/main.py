@@ -155,6 +155,17 @@ latest_frames: dict[str, pa.Array] = {}
 # Bumped on every stored frame, so a sender can tell a new frame from the
 # one it already sent.
 frame_seq: dict[str, int] = {name: 0 for name in CAMERA_VIEW_INPUTS}
+# When this node last got a frame from each viewed camera (time.monotonic()).
+# This is the time of receipt, not the frame's dora timestamp, so the event
+# loop falling behind (both arms report at 250 Hz once started) cannot make a
+# camera that is still delivering look disconnected.
+frame_received_at: dict[str, float] = {}
+# A tile shows 映像なし only once its camera has sent nothing for this long,
+# which is far longer than any gap a working camera at 30 fps leaves.
+CAMERA_VIEW_SILENT_AFTER_S = 2.0
+# How often /cameras repeats which cameras are live, so a tile turns to
+# 映像なし even though no frame will come to tell it.
+CAMERA_VIEW_STATUS_INTERVAL_S = 0.5
 
 # dora-openarm status inputs, one per arm. The input id matches the State field
 ARM_STATUS_INPUTS = ("arm_status_right", "arm_status_left")
@@ -316,6 +327,20 @@ def _store_camera_frame(event_id: str, value, metadata) -> None:
         return
     latest_frames[event_id] = value
     frame_seq[event_id] += 1
+    frame_received_at[event_id] = time.monotonic()
+
+
+def _camera_view_status() -> dict[str, bool]:
+    """Whether each viewed camera is delivering, keyed by input id.
+
+    A camera that never sent a frame is left out: this dataflow did not wire
+    it, so its tile stays hidden rather than reading 映像なし forever.
+    """
+    now = time.monotonic()
+    return {
+        name: now - received_at <= CAMERA_VIEW_SILENT_AFTER_S
+        for name, received_at in frame_received_at.items()
+    }
 
 
 def _update_arm_health(side: str, value) -> None:
@@ -539,6 +564,9 @@ def _root(request: Request):
             "manual": manual,
             "launcher_url": launcher_url,
             "camera_view_enabled": camera_view_fps > 0,
+            # Rendered into the tiles so that the reload after every state
+            # change (an arm starting, say) keeps them as they were.
+            "camera_view_status": _camera_view_status(),
             "launcher_session_id_json": json.dumps(os.getenv("LAUNCHER_SESSION_ID") or ""),
         },
     )
@@ -702,7 +730,11 @@ async def _arm_health() -> AsyncIterable[ServerSentEvent]:
 
 @app.websocket("/cameras")
 async def _cameras(websocket: WebSocket):
-    """Push each viewed camera's newest frame: its name, a newline, the JPEG.
+    """Push each viewed camera's newest frame and whether it is live.
+
+    Frames are binary messages: the camera's name, a newline, the JPEG.
+    Every CAMERA_VIEW_STATUS_INTERVAL_S a text message carries
+    _camera_view_status() as JSON; it alone decides 映像なし.
 
     One socket carries every camera: the page already holds five SSE
     streams, and one MJPEG stream per camera would exhaust the browser's six
@@ -715,8 +747,13 @@ async def _cameras(websocket: WebSocket):
         await websocket.close()
         return
     sent = {name: 0 for name in CAMERA_VIEW_INPUTS}
+    status_sent_at = 0.0
     try:
         while state.running:
+            now = time.monotonic()
+            if now - status_sent_at >= CAMERA_VIEW_STATUS_INTERVAL_S:
+                status_sent_at = now
+                await websocket.send_text(json.dumps(_camera_view_status()))
             for name in CAMERA_VIEW_INPUTS:
                 seq = frame_seq[name]
                 if seq == sent[name] or name not in latest_frames:

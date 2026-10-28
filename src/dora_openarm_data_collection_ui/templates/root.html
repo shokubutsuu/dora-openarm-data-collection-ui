@@ -552,14 +552,15 @@
     </div>
 
     {% if camera_view_enabled -%}
-    <div class="camera-view" id="camera-view" hidden>
+    <div class="camera-view" id="camera-view"{% if not camera_view_status %} hidden{% endif %}>
       <div class="camera-stats-title">カメラ映像（ライブ）</div>
       {% for cam, label, kind in [
         ("camera_ceiling", "天井", "ceiling"),
         ("camera_head_left", "頭部（左）", "head"),
         ("camera_head_right", "頭部（右）", "head"),
       ] -%}
-      <div class="camera-tile {{ kind }} stale" data-cam-view="{{ cam }}" hidden>
+      <div class="camera-tile {{ kind }}{% if camera_view_status.get(cam) == false %} stale{% endif %}"
+           data-cam-view="{{ cam }}"{% if cam not in camera_view_status %} hidden{% endif %}>
         <span class="cam-name">{{ label }}</span>
         <div class="frame">
           <img alt="{{ label }}">
@@ -1011,26 +1012,28 @@
         }
         document.getElementById("camera-alert").style.display =
           stale > 0 ? "block" : "none";
-
-        // The live tiles follow the same rule as the rows: shown once wired,
-        // dimmed while the camera sends nothing.
-        let shownTiles = 0;
-        for (const tile of document.querySelectorAll("[data-cam-view]")) {
-          const s = stats[tile.dataset.camView];
-          tile.hidden = !s;
-          if (!s) continue;
-          shownTiles += 1;
-          tile.classList.toggle("stale", s.fps <= 0);
-        }
-        const cameraView = document.getElementById("camera-view");
-        if (cameraView) cameraView.hidden = shownTiles === 0;
       };
 
       // Live camera view: one WebSocket carries every camera as
-      // `name\n<jpeg>`. Closed while the tab is hidden so a forgotten
+      // `name\n<jpeg>` (binary), plus a JSON text message saying which
+      // cameras are live. Only that message shows 映像なし: a camera is
+      // reported silent when this node stops receiving it, and nothing
+      // else -- a page reload, an arm starting, this socket reconnecting --
+      // changes a tile. Closed while the tab is hidden so a forgotten
       // window does not keep decoding video next to the recorder.
       if (document.getElementById("camera-view")) {
         const frameUrls = {};
+        const applyCameraStatus = (live) => {
+          let shown = 0;
+          for (const tile of document.querySelectorAll("[data-cam-view]")) {
+            const cam = tile.dataset.camView;
+            tile.hidden = !(cam in live);
+            if (tile.hidden) continue;
+            shown += 1;
+            tile.classList.toggle("stale", !live[cam]);
+          }
+          document.getElementById("camera-view").hidden = shown === 0;
+        };
         let cameraSocket = null;
         let reconnectTimer = null;
         const openCameraSocket = () => {
@@ -1039,6 +1042,10 @@
           cameraSocket = new WebSocket(`${scheme}://${location.host}/cameras`);
           cameraSocket.binaryType = "arraybuffer";
           cameraSocket.onmessage = (e) => {
+            if (typeof e.data === "string") {
+              applyCameraStatus(JSON.parse(e.data));
+              return;
+            }
             const bytes = new Uint8Array(e.data);
             const split = bytes.indexOf(10);  // "\n"
             if (split < 0) return;
