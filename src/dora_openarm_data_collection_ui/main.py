@@ -421,7 +421,9 @@ def _series_rate(series, now: float, stale_after_s: float) -> tuple[float, float
     if span <= 0:
         return 0.0, 0.0
     shortest = longest = series[1] - series[0]
-    for previous, current in zip(series, itertools.islice(series, 1, None), strict=False):
+    for previous, current in zip(
+        series, itertools.islice(series, 1, None), strict=False
+    ):
         gap = current - previous
         shortest = min(shortest, gap)
         longest = max(longest, gap)
@@ -607,7 +609,9 @@ def apply_task(index):
             + urllib.parse.quote(f"{task_set}/{path.name}/{_mtime(path)}")
             for number, path in enumerate(found)
         ]
-    state.task_reference_missing = video if video and not _is_url(video) and not found else ""
+    state.task_reference_missing = (
+        video if video and not _is_url(video) and not found else ""
+    )
 
 
 # Where a description is split: "Initial state: … Done when … Before
@@ -856,7 +860,9 @@ def _root(request: Request):
             # blink out until /arm-health's first snapshot.
             "lifter_present": _lifter_present(),
             "lifter_controls": _lifter_controls_enabled(),
-            "launcher_session_id_json": json.dumps(os.getenv("LAUNCHER_SESSION_ID") or ""),
+            "launcher_session_id_json": json.dumps(
+                os.getenv("LAUNCHER_SESSION_ID") or ""
+            ),
         },
     )
 
@@ -928,7 +934,9 @@ def _lifter(direction: str):
     if direction != "stop" and not _lifter_controls_enabled():
         return JSONResponse({"accepted": False, "reason": "not-ker"}, status_code=409)
     if direction != "stop" and state.collecting:
-        return JSONResponse({"accepted": False, "reason": "collecting"}, status_code=409)
+        return JSONResponse(
+            {"accepted": False, "reason": "collecting"}, status_code=409
+        )
     _command_lifter(direction)
     return {"accepted": True}
 
