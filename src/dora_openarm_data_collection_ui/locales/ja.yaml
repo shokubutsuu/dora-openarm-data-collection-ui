@@ -97,4 +97,5 @@ action_unconfirmed: "操作を確認できませんでした。画面の状態�
 manual_not_found: "操作マニュアルが見つかりません: {path}"
 manual_unreadable: "操作マニュアルを読み込めません: {error}"
 manual_no_sections: "操作マニュアルに sections がありません: {path}"
+lifter_command_failed: "リフターに指示を送れません: {error}"
 input_stopped: "入力 {input} が停止しました（ノードが終了した可能性があります）"

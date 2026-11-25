@@ -686,8 +686,8 @@ def split_description(text):
 
     Returns [{"heading", "text", "kind"}], or [] when the description has
     no headings, so the caller shows it as one paragraph. Text before the
-    first heading is a section without a heading, except in the older
-    marker style, where it is the initial state.
+    first heading is a section without a heading, except before a "Done
+    when" / 完了状態 marker, where it is the initial state.
     """
     text = _CJK_SPACE.sub("", " ".join(str(text or "").split()))
     sections = []
@@ -703,7 +703,11 @@ def split_description(text):
     body = text[start:].strip()
     if heading or body:
         sections.append((heading, body))
-    if sections and sections[0][0] is None and "【" not in text:
+    # In the marker style, the text before "Done when" / 完了状態 is the
+    # initial state. Anything else before the first heading stays without
+    # one: "Pick a spoon. Before repeating, …" is not an initial state.
+    headings = {heading for heading, _ in sections}
+    if sections[0][0] is None and headings & {"Done when", "完了状態"}:
         sections[0] = ("Initial state", sections[0][1])
     result = []
     for heading, body in sections:
@@ -856,8 +860,10 @@ def _command_lifter(direction):
         lifter.hold_until = time.monotonic() + LIFTER_HOLD_TIMEOUT_S
         if lifter.moving == direction:
             return
-        lifter.moving = direction
-        node.send_output("lifter_command", pa.array([LIFTER_COMMANDS[direction]]))
+        # Moving only once the command is out, so that a failed send leaves
+        # nothing for the watchdog or the next start to stop.
+        if _send_lifter_command(direction):
+            lifter.moving = direction
 
 
 def _stop_lifter_if_moving(expired_only=False):
@@ -872,7 +878,22 @@ def _stop_lifter_if_moving(expired_only=False):
         if expired_only and time.monotonic() <= lifter.hold_until:
             return
         lifter.moving = None
-        node.send_output("lifter_command", pa.array([LIFTER_COMMANDS["stop"]]))
+        _send_lifter_command("stop")
+
+
+def _send_lifter_command(direction):
+    """Send a lifter command; return whether it went out.
+
+    A failure is shown on the task screen instead of raised: this runs from
+    the watchdog and before every start, which must keep working when the
+    dataflow does not wire `lifter_command`.
+    """
+    try:
+        node.send_output("lifter_command", pa.array([LIFTER_COMMANDS[direction]]))
+    except Exception as error:  # dora raises plain exceptions here.
+        _record_error("ui", t("lifter_command_failed", error=error))
+        return False
+    return True
 
 
 def _update_lifter_elevation(value) -> None:
@@ -929,6 +950,8 @@ async def _api_error(request: Request):
     try:
         payload = await request.json()
     except ValueError:
+        payload = {}
+    if not isinstance(payload, dict):
         payload = {}
     if _record_error(payload.get("source", "dataflow"), payload.get("message", "")):
         await _notify_state_changed()
@@ -1418,7 +1441,9 @@ def main():
     metadata = load_yaml(args.metadata_file)
     global task_set
     task_set = str(metadata.get("task_set") or args.metadata_file.stem)
-    tasks = metadata["tasks"]
+    tasks = metadata.get("tasks")
+    if not tasks:
+        raise SystemExit(f"{args.metadata_file}: `tasks` is missing or empty")
     global lifter_equipped, leader
     try:
         lifter_equipped = "lifter" in metadata["equipment"]["embodiments"]
