@@ -1,4 +1,4 @@
-/* --- 右側: キー操作とカメラ ------------------------------------ */
+/* --- Right side: keys and cameras ------------------------------ */
 .right { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .bar {
   display: flex;
@@ -34,7 +34,7 @@
 .key.stop { border-color: var(--bad); }
 .key.stop input { color: var(--bad); }
 .key.dim input { color: var(--muted); }
-/* --- カメラ映像（ライブ） ------------------------------------- */
+/* --- Live camera view ------------------------------------------ */
 /* Three views: one head camera, the head with both wrists, or all
    five. Each image is shown whole inside its tile, whatever its shape
    (the head is 16:9, the others 16:10). */

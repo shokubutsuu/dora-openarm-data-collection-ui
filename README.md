@@ -2,9 +2,6 @@
 
 A [dora-rs](https://dora-rs.ai/) node that provides UI for data collection with OpenArm.
 
-The UI is in Japanese, so that operators who do not read English can run a
-collection session.
-
 ## Configuration
 
 | Environment variable | Option | Description |
@@ -16,16 +13,12 @@ collection session.
 | `AUTO_OPEN` | `--auto-open` | Open a Web browser on start |
 | `CAMERA_VIEW_FPS` | `--camera-view-fps` | Rate of the live camera view (default `10`, `0` turns it off) |
 
-Tasks in the metadata may carry `prompt_ja` and `description_ja`. They are shown
-instead of `prompt` / `description`, which stay in English because the recorder
-writes them to the dataset as its language instruction.
-
 The manual file is:
 
 ```yaml
-title: 操作マニュアル
+title: Operation manual
 sections:
-  - title: アームの同期手順
+  - title: Aligning the arms
     steps: ["...", "..."]     # numbered
     bullets: ["...", "..."]   # unnumbered
     note: "..."               # highlighted warning
@@ -36,9 +29,9 @@ sections:
 The task screen shows the cameras live next to the task: `camera_ceiling`
 always, and below it either the head pair (`camera_head_left`,
 `camera_head_right`) or the wrist pair (`camera_wrist_left`,
-`camera_wrist_right`), picked with the 頭部 / 手首 tabs. A tab shows ⚠ when
+`camera_wrist_right`), picked with the Head / Wrist tabs. A tab shows ⚠ when
 a camera of its pair stops, even while the other pair is on screen. A tile
-shows 映像なし once its camera has sent nothing for 2 s.
+shows No signal once its camera has sent nothing for 2 s.
 
 Frames must be JPEG (`encoding` metadata `jpeg`, or none). They are forwarded
 as they are over one WebSocket (`/cameras?group=head|wrist`), newest frame

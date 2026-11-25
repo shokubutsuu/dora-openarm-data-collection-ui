@@ -33,13 +33,13 @@ async function requestQuit(confirmFirst) {
     return;
   }
   if (window.quitRequestPending) return;
-  if (confirmFirst && !window.confirm("現在のデータ収集を終了しますか？")) return;
+  if (confirmFirst && !window.confirm("Quit the current data collection?")) return;
   window.quitRequestPending = true;
   const form = document.getElementById("quit-form");
   if (form) {
     const button = form.querySelector("input[type=submit]");
     if (button) {
-      button.value = "終了しています…";
+      button.value = "Quitting…";
       button.disabled = true;
     }
   }
@@ -72,7 +72,7 @@ async function requestQuit(confirmFirst) {
     await new Promise(resolve => setTimeout(resolve, 500));
   }
   document.getElementById("ending-hint").textContent =
-    "終了処理に時間がかかっています。ランチャーで状態を確認してください。";
+    "Quitting is taking a while. Check the launcher.";
   document.getElementById("ending-actions").hidden = false;
 }
 const quitForm = document.getElementById("quit-form");

@@ -106,8 +106,7 @@ class State:
     episode_number: int = 0
     task_index: int = 0
     task_title: str = ""
-    # The dataset language instruction (tasks[].prompt), kept even when
-    # task_title shows the Japanese tasks[].prompt_ja.
+    # The dataset language instruction (tasks[].prompt).
     task_prompt: str = ""
     task_description: str = ""
     # task_description split at its headings (see split_description), one
@@ -202,11 +201,11 @@ frame_seq: dict[str, int] = {name: 0 for name in CAMERA_VIEW_INPUTS}
 # loop falling behind (both arms report at 250 Hz once started) cannot make a
 # camera that is still delivering look disconnected.
 frame_received_at: dict[str, float] = {}
-# A tile shows 映像なし only once its camera has sent nothing for this long,
+# A tile shows No signal only once its camera has sent nothing for this long,
 # which is far longer than any gap a working camera at 30 fps leaves.
 CAMERA_VIEW_SILENT_AFTER_S = 2.0
 # How often /cameras repeats which cameras are live, so a tile turns to
-# 映像なし even though no frame will come to tell it.
+# No signal even though no frame will come to tell it.
 CAMERA_VIEW_STATUS_INTERVAL_S = 0.5
 
 # dora-openarm status inputs, one per arm. The input id matches the State field
@@ -462,7 +461,7 @@ def _camera_view_status() -> dict[str, bool]:
     """Whether each viewed camera is delivering, keyed by input id.
 
     A camera that never sent a frame is left out: this dataflow did not wire
-    it, so its tile stays hidden rather than reading 映像なし forever.
+    it, so its tile stays hidden rather than reading No signal forever.
     """
     now = time.monotonic()
     return {
@@ -589,14 +588,12 @@ async def _notify_state_changed() -> None:
 
 
 def apply_task(index):
-    """Show the task at the given index, in Japanese when the metadata has it."""
+    """Show the task at the given index."""
     task = tasks[index]
     state.task_index = index
-    # prompt_ja / description_ja are display only: prompt stays English so the
-    # recorded dataset keeps its language instruction.
-    state.task_title = task.get("prompt_ja") or task.get("prompt", "")
+    state.task_title = task.get("prompt", "")
     state.task_prompt = task.get("prompt", "")
-    state.task_description = task.get("description_ja") or task.get("description", "")
+    state.task_description = task.get("description", "")
     state.task_sections = split_description(state.task_description)
     video = str(task.get("reference_video") or "").strip()
     found = reference_video_files(index)
@@ -613,34 +610,21 @@ def apply_task(index):
     state.task_reference_missing = video if video and not _is_url(video) and not found else ""
 
 
-# Folded YAML joins Japanese lines with a space: drop spaces between
-# non-ASCII characters.
-_CJK_SPACE = re.compile(r"(?<=[^\x00-\x7f]) +(?=[^\x00-\x7f])")
-# Where a description is split: 【注意】 style headings, and the older
-# 「初期状態: … 完了状態: … 次の周を始める前に、…」 and English
-# "Initial state: … Done when … Before repeating …" markers. "Before
-# repeating" is a lookahead, so it stays in the section's text.
+# Where a description is split: "Initial state: … Done when … Before
+# repeating …" markers. "Before repeating" is a lookahead, so it stays in
+# the section's text.
 _DESCRIPTION_HEADING = re.compile(
-    r"【(?P<bracket>[^】]+)】"
-    r"|(?P<marker>初期状態|完了状態|Initial state)\s*[:：]"
-    r"|(?P<reset_ja>次の周を始める前に)[、,]?"
+    r"(?P<marker>Initial state)\s*:"
     r"|\b(?P<done_en>Done when)\s+"
     r"|(?=\b(?P<reset_en>Before repeating)\b)"
 )
-# heading -> (label shown, kind). The kind colours the section: "warn" must
-# not be missed, "setup" is how the scene starts, "done" is when to stop,
-# "reset" is for between rounds. Unlisted 【…】 headings show as they are.
+# heading -> (label shown, kind). The kind colours the section: "setup" is
+# how the scene starts, "done" is when to stop, "reset" is for between
+# rounds.
 _DESCRIPTION_KINDS = {
-    "注意": ("注意", "warn"),
-    "スキップ": ("スキップ", "warn"),
-    "準備": ("準備", "setup"),
-    "初期状態": ("開始時", "setup"),
-    "Initial state": ("開始時", "setup"),
-    "完了": ("完了", "done"),
-    "完了状態": ("完了条件", "done"),
-    "Done when": ("完了条件", "done"),
-    "次の周を始める前に": ("次の周の前に", "reset"),
-    "Before repeating": ("次の周の前に", "reset"),
+    "Initial state": ("Initial state", "setup"),
+    "Done when": ("Done when", "done"),
+    "Before repeating": ("Before the next round", "reset"),
 }
 
 
@@ -652,7 +636,7 @@ def split_description(text):
     first heading is a section without a heading, except in the older
     marker style, where it is the initial state.
     """
-    text = _CJK_SPACE.sub("", " ".join(str(text or "").split()))
+    text = " ".join(str(text or "").split())
     sections = []
     heading, start = None, 0
     for match in _DESCRIPTION_HEADING.finditer(text):
@@ -666,8 +650,8 @@ def split_description(text):
     body = text[start:].strip()
     if heading or body:
         sections.append((heading, body))
-    if sections and sections[0][0] is None and "【" not in text:
-        sections[0] = ("初期状態", sections[0][1])
+    if sections and sections[0][0] is None:
+        sections[0] = ("Initial state", sections[0][1])
     result = []
     for heading, body in sections:
         label, kind = _DESCRIPTION_KINDS.get(heading, (heading or "", ""))
@@ -1095,7 +1079,7 @@ async def _cameras(websocket: WebSocket):
     Every CAMERA_VIEW_STATUS_INTERVAL_S a text message carries
     _camera_view_status() as JSON for every camera, including those not
     shown, so the other views' buttons can warn about a dead camera; it
-    alone decides 映像なし.
+    alone decides No signal.
 
     One socket carries every camera: the page already holds five SSE
     streams, and one MJPEG stream per camera would exhaust the browser's six
@@ -1160,9 +1144,9 @@ def load_manual(path):
 
     The file is YAML:
 
-        title: 操作マニュアル
+        title: Operation manual
         sections:
-          - title: アームの同期手順
+          - title: Aligning the arms
             steps: ["...", "..."]
             note: "..."
     """
@@ -1170,15 +1154,15 @@ def load_manual(path):
         return None
     path = pathlib.Path(path)
     if not path.exists():
-        _record_error("ui", f"操作マニュアルが見つかりません: {path}")
+        _record_error("ui", f"Operation manual not found: {path}")
         return None
     try:
         loaded = load_yaml(path)
     except yaml.YAMLError as error:
-        _record_error("ui", f"操作マニュアルを読み込めません: {error}")
+        _record_error("ui", f"Cannot read the operation manual: {error}")
         return None
     if not isinstance(loaded, dict) or not loaded.get("sections"):
-        _record_error("ui", f"操作マニュアルに sections がありません: {path}")
+        _record_error("ui", f"The operation manual has no sections: {path}")
         return None
     return loaded
 
@@ -1207,8 +1191,8 @@ async def _main_dora(server):
             # A node that ends while we are still running has died.
             _record_error(
                 "dora",
-                f"入力 {_event_field(event, 'id', '?')} が停止しました"
-                "（ノードが終了した可能性があります）",
+                f"Input {_event_field(event, 'id', '?')} stopped"
+                " (its node may have exited)",
             )
             await _notify_state_changed()
         elif event["type"] == "INPUT":

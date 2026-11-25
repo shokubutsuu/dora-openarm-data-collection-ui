@@ -34,7 +34,7 @@ const setAlert = (key, level, text) => {
 // A rate row's alert: silent, under the rate, or jittery.
 const rateAlert = (key, name, s, fpsMin, jitterWarn, jitterError, silentHint = "") => {
   if (!s || s.fps <= 0) {
-    setAlert(key, "error", `${name}: 届いていません${silentHint}`);
+    setAlert(key, "error", `${name}: not received${silentHint}`);
   } else if (s.fps < fpsMin || s.jitter_ms > jitterError) {
     setAlert(key, "error",
       `${name}: ${s.fps.toFixed(1)} Hz, Δ ${s.jitter_ms.toFixed(1)} ms`);

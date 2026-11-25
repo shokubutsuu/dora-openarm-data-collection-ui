@@ -3,34 +3,34 @@
   {% if not camera_view_enabled %}{{ lifter_panel() }}{% endif -%}
   {% if state.collecting -%}
     <form class="key go" id="finish-form" action="{{ url_for("_success") }}" method="post">
-      <kbd>C</kbd><input type="submit" value="成功で終了">
+      <kbd>C</kbd><input type="submit" value="Success!">
     </form>
     <form class="key stop" id="fail-form" action="{{ url_for("_fail") }}" method="post">
-      <kbd>A</kbd><input type="submit" value="失敗で終了">
+      <kbd>A</kbd><input type="submit" value="Fail!">
     </form>
     <form class="key" id="cancel-form" action="{{ url_for("_cancel") }}" method="post">
-      <kbd>A 長押し</kbd><input type="submit" value="取り消し">
+      <kbd>Hold A</kbd><input type="submit" value="Cancel!">
     </form>
   {% else -%}
     <form class="key go" id="start-form" action="{{ url_for("_start") }}" method="post">
-      <kbd>C</kbd><input type="submit" value="スタート">
+      <kbd>C</kbd><input type="submit" value="Start!">
     </form>
     <form class="key" id="skip-form" action="{{ url_for("_skip") }}" method="post">
-      <kbd>C 長押し</kbd><input type="submit" value="このタスクを飛ばす">
+      <kbd>Hold C</kbd><input type="submit" value="Skip task">
     </form>
   {% endif -%}
   {% if state.arm_status_right == "stopped" and state.arm_status_left == "stopped" -%}
     <form class="key" id="arm-start-form" action="{{ url_for("_arm_start") }}" method="post">
-      <kbd>B 長押し</kbd><input type="submit" value="アーム起動">
+      <kbd>Hold B</kbd><input type="submit" value="Start Arm">
     </form>
   {% else -%}
     <form class="key" id="arm-stop-form" action="{{ url_for("_arm_stop") }}" method="post">
-      <kbd>B 長押し</kbd><input type="submit" value="アーム停止">
+      <kbd>Hold B</kbd><input type="submit" value="Pause Arm">
     </form>
   {% endif -%}
   {% if state.running -%}
     <form class="key dim" id="quit-form" action="{{ url_for("_quit") }}" method="post">
-      <kbd>B</kbd><input type="submit" value="終了">
+      <kbd>B</kbd><input type="submit" value="Quit">
     </form>
   {% endif -%}
 </div>

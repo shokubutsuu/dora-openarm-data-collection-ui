@@ -1,7 +1,7 @@
 // Live camera view: one WebSocket carries the picked view's cameras
 // (`?view=`) as `name\n<jpeg>` (binary), plus a JSON text message
 // saying which cameras are live, the other views' included so their
-// buttons can show ⚠. Only that message shows 映像なし: a camera is
+// buttons can show ⚠. Only that message shows No signal: a camera is
 // reported silent when this node stops receiving it, and nothing
 // else -- a page reload, an arm starting, this socket reconnecting --
 // changes a tile. Closed while the tab is hidden so a forgotten

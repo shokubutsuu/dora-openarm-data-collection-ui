@@ -1,4 +1,4 @@
-/* --- 左パネル --------------------------------------------------- */
+/* --- Left panel ------------------------------------------------ */
 .side {
   background: var(--panel);
   border-right: 1px solid var(--line);
@@ -79,7 +79,7 @@
 #live-alerts:empty { display: none; }
 #live-alerts li.warn { color: var(--warn); border-color: var(--warn); }
 .error-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
-/* --- ストリーム状態 -------------------------------------------- */
+/* --- Stream status --------------------------------------------- */
 .camera-stats { display: flex; flex-direction: column; gap: 2px; }
 .camera-stats + .camera-stats { margin-top: 8px; }
 .stat-row {
