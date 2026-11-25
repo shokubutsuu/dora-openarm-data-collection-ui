@@ -1392,9 +1392,11 @@ def main():
         help=f"Live camera view rate, 0 to disable ({camera_view_fps:g})",
         type=float,
     )
+    # An option only, not an environment variable, so that the dataflow's
+    # `args:` alone sets the language.
     parser.add_argument(
         "--language",
-        default=os.getenv("UI_LANGUAGE") or DEFAULT_LANGUAGE,
+        default=DEFAULT_LANGUAGE,
         choices=available_languages(),
         help=f"The language of the UI ({DEFAULT_LANGUAGE})",
     )

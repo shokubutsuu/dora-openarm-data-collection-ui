@@ -9,7 +9,7 @@
       ("camera_ceiling", t("cam_ceiling")),
     ] -%}
     <div class="stat-row stale" data-cam="{{ cam }}">
-      <span class="cam-name">{{ label }}</span>
+      <span class="cam-name" title="{{ label }}">{{ label }}</span>
       <span class="cam-fps mono">-- Hz</span>
       <span class="cam-jitter mono">Δ -- ms</span>
       <span class="cam-latency mono tone">{{ t("latency") }} --</span>
