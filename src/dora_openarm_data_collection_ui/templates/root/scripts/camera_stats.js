@@ -18,10 +18,10 @@ statsSource.onmessage = (e) => {
     }
     // Only a camera that has stopped raises the errors panel. A low
     // rate, delay or jitter is shown in the row's colours instead.
-    const name = "カメラ " + row.querySelector(".cam-name").textContent;
+    const name = TEXT.camera + " " + row.querySelector(".cam-name").textContent;
     const s = stats[row.dataset.cam];
     if (!s || s.fps <= 0) {
-      setAlert(key, "error", `${name}: 届いていません（USB を確認してください）`);
+      setAlert(key, "error", `${name}: ${TEXT.camera_not_received}`);
     } else {
       setAlert(key, null);
     }
@@ -36,7 +36,7 @@ statsSource.onmessage = (e) => {
     if (!s || s.fps <= 0) {
       fpsEl.textContent = "-- Hz";
       jitterEl.textContent = "Δ -- ms";
-      row.querySelector(".cam-latency").textContent = "遅延 --";
+      row.querySelector(".cam-latency").textContent = TEXT.latency + " --";
       row.classList.add("stale");
       row.classList.remove("warn", "error");
       continue;
@@ -48,7 +48,7 @@ statsSource.onmessage = (e) => {
     const latency = s.latency_ms ?? 0;
     const latencyLevel = latency > LATENCY_ERROR_MS ? "error"
       : latency > LATENCY_WARN_MS ? "warn" : null;
-    latencyEl.textContent = "遅延 " + latency.toFixed(0) + " ms";
+    latencyEl.textContent = TEXT.latency + " " + latency.toFixed(0) + " ms";
     latencyEl.classList.toggle("error", latencyLevel === "error");
     latencyEl.classList.toggle("warn", latencyLevel === "warn");
     const isError = s.fps < FPS_ERROR || s.jitter_ms > JITTER_ERROR_MS;

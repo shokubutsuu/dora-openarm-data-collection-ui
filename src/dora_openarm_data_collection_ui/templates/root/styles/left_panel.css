@@ -1,4 +1,4 @@
-/* --- 左パネル --------------------------------------------------- */
+/* --- Left panel ------------------------------------------------ */
 .side {
   background: var(--panel);
   border-right: 1px solid var(--line);
@@ -79,7 +79,7 @@
 #live-alerts:empty { display: none; }
 #live-alerts li.warn { color: var(--warn); border-color: var(--warn); }
 .error-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
-/* --- ストリーム状態 -------------------------------------------- */
+/* --- Stream status --------------------------------------------- */
 .camera-stats { display: flex; flex-direction: column; gap: 2px; }
 .camera-stats + .camera-stats { margin-top: 8px; }
 .stat-row {
@@ -89,12 +89,21 @@
   align-items: baseline;
   font-size: 13px;
 }
-/* Cameras add a latency column. */
-.stat-row[data-cam] { grid-template-columns: 1fr 64px 72px 72px; }
+/* Cameras add a latency column. The numbers take the width they need in
+   the UI's language ("Latency 120 ms" is wider than "遅延 120 ms") and
+   never wrap; a long camera name is cut short instead. */
+.stat-row[data-cam] {
+  grid-template-columns: minmax(0, 1fr) minmax(56px, auto) minmax(64px, auto) auto;
+}
 .stat-row .cam-fps,
 .stat-row .cam-jitter,
-.stat-row .cam-latency { text-align: right; }
-.cam-latency { color: var(--muted); }
+.stat-row .cam-latency { text-align: right; white-space: nowrap; }
+.stat-row[data-cam] .cam-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cam-latency { color: var(--muted); min-width: 72px; }
 .stat-row .cam-fps { color: var(--ok); }
 .stat-row .cam-jitter { color: var(--muted); }
 .stat-row.warn .cam-jitter { color: var(--warn); }

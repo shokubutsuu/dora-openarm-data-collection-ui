@@ -4,7 +4,7 @@
      data-view="{{ camera_view_default }}"{% if not camera_view_status %} hidden{% endif %}>
   <div class="camera-view-head">
     <div class="camera-tabs" role="tablist">
-      {% for view, label in [("head", "頭部"), ("wrists", "頭部＋手首"), ("all", "全カメラ")] -%}
+      {% for view, label in [("head", t("view_head")), ("wrists", t("view_wrists")), ("all", t("view_all"))] -%}
       {% set tab = namespace(wired=false, warn=false) -%}
       {% for cam in camera_views[view] -%}
         {% if cam in camera_view_status -%}
@@ -22,11 +22,11 @@
     {{ lifter_panel() }}
   </div>
   {% for cam, label in [
-    ("camera_head_left", "頭部（左）"),
-    ("camera_head_right", "頭部（右）"),
-    ("camera_ceiling", "天井"),
-    ("camera_wrist_left", "手首（左）"),
-    ("camera_wrist_right", "手首（右）"),
+    ("camera_head_left", t("cam_head_left")),
+    ("camera_head_right", t("cam_head_right")),
+    ("camera_ceiling", t("cam_ceiling")),
+    ("camera_wrist_left", t("cam_wrist_left")),
+    ("camera_wrist_right", t("cam_wrist_right")),
   ] -%}
   <div class="camera-tile{% if camera_view_status.get(cam) == false %} stale{% endif %}"
        data-cam-view="{{ cam }}"
@@ -35,7 +35,7 @@
     <span class="cam-name">{{ label }}</span>
     <div class="frame">
       <img alt="{{ label }}">
-      <div class="no-signal">映像なし</div>
+      <div class="no-signal">{{ t("no_signal") }}</div>
     </div>
   </div>
   {% endfor -%}

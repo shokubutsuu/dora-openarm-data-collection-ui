@@ -30,7 +30,7 @@ async function submitAction(form) {
     location.replace(response.url);
   } catch (error) {
     window.actionPending = false;
-    window.alert("操作を確認できませんでした。画面の状態を確認してください。");
+    window.alert(TEXT.action_unconfirmed);
   }
 }
 if (EMBEDDED) {

@@ -49,6 +49,37 @@ import yaml
 base_dir = os.path.dirname(__file__)
 templates = Jinja2Templates(directory=f"{base_dir}/templates")
 
+# The UI's text, one YAML file per language (see --language). English is the
+# default and the fallback for any key another language does not have.
+LOCALES_DIR = pathlib.Path(base_dir) / "locales"
+DEFAULT_LANGUAGE = "en"
+language = DEFAULT_LANGUAGE
+messages: dict[str, str] = {}
+
+
+def available_languages():
+    """Return the languages that have a file under locales/."""
+    return sorted(path.stem for path in LOCALES_DIR.glob("*.yaml"))
+
+
+def load_messages(lang):
+    """Use the given language's text, English where it has none."""
+    global language, messages
+    loaded = load_yaml(LOCALES_DIR / f"{DEFAULT_LANGUAGE}.yaml")
+    if lang != DEFAULT_LANGUAGE:
+        loaded.update(load_yaml(LOCALES_DIR / f"{lang}.yaml") or {})
+    language = lang
+    messages = {key: str(value) for key, value in loaded.items()}
+
+
+def t(key, /, **values):
+    """Return the text for key in the UI's language, {name}s filled in."""
+    text = messages.get(key, key)
+    return text.format(**values) if values else text
+
+
+templates.env.globals["t"] = t
+
 node = None
 
 auto_open = False
@@ -106,8 +137,7 @@ class State:
     episode_number: int = 0
     task_index: int = 0
     task_title: str = ""
-    # The dataset language instruction (tasks[].prompt), kept even when
-    # task_title shows the Japanese tasks[].prompt_ja.
+    # The dataset language instruction (tasks[].prompt).
     task_prompt: str = ""
     task_description: str = ""
     # task_description split at its headings (see split_description), one
@@ -202,11 +232,11 @@ frame_seq: dict[str, int] = {name: 0 for name in CAMERA_VIEW_INPUTS}
 # loop falling behind (both arms report at 250 Hz once started) cannot make a
 # camera that is still delivering look disconnected.
 frame_received_at: dict[str, float] = {}
-# A tile shows 映像なし only once its camera has sent nothing for this long,
+# A tile shows No signal only once its camera has sent nothing for this long,
 # which is far longer than any gap a working camera at 30 fps leaves.
 CAMERA_VIEW_SILENT_AFTER_S = 2.0
 # How often /cameras repeats which cameras are live, so a tile turns to
-# 映像なし even though no frame will come to tell it.
+# No signal even though no frame will come to tell it.
 CAMERA_VIEW_STATUS_INTERVAL_S = 0.5
 
 # dora-openarm status inputs, one per arm. The input id matches the State field
@@ -422,7 +452,9 @@ def _series_rate(series, now: float, stale_after_s: float) -> tuple[float, float
     if span <= 0:
         return 0.0, 0.0
     shortest = longest = series[1] - series[0]
-    for previous, current in zip(series, itertools.islice(series, 1, None), strict=False):
+    for previous, current in zip(
+        series, itertools.islice(series, 1, None), strict=False
+    ):
         gap = current - previous
         shortest = min(shortest, gap)
         longest = max(longest, gap)
@@ -462,7 +494,7 @@ def _camera_view_status() -> dict[str, bool]:
     """Whether each viewed camera is delivering, keyed by input id.
 
     A camera that never sent a frame is left out: this dataflow did not wire
-    it, so its tile stays hidden rather than reading 映像なし forever.
+    it, so its tile stays hidden rather than reading No signal forever.
     """
     now = time.monotonic()
     return {
@@ -589,14 +621,16 @@ async def _notify_state_changed() -> None:
 
 
 def apply_task(index):
-    """Show the task at the given index, in Japanese when the metadata has it."""
+    """Show the task at the given index, in the UI's language when it has one."""
     task = tasks[index]
     state.task_index = index
-    # prompt_ja / description_ja are display only: prompt stays English so the
-    # recorded dataset keeps its language instruction.
-    state.task_title = task.get("prompt_ja") or task.get("prompt", "")
+    # prompt_<language> / description_<language> are display only: prompt
+    # stays as it is so the recorded dataset keeps its language instruction.
+    state.task_title = task.get(f"prompt_{language}") or task.get("prompt", "")
     state.task_prompt = task.get("prompt", "")
-    state.task_description = task.get("description_ja") or task.get("description", "")
+    state.task_description = task.get(f"description_{language}") or task.get(
+        "description", ""
+    )
     state.task_sections = split_description(state.task_description)
     video = str(task.get("reference_video") or "").strip()
     found = reference_video_files(index)
@@ -610,16 +644,18 @@ def apply_task(index):
             + urllib.parse.quote(f"{task_set}/{path.name}/{_mtime(path)}")
             for number, path in enumerate(found)
         ]
-    state.task_reference_missing = video if video and not _is_url(video) and not found else ""
+    state.task_reference_missing = (
+        video if video and not _is_url(video) and not found else ""
+    )
 
 
 # Folded YAML joins Japanese lines with a space: drop spaces between
 # non-ASCII characters.
 _CJK_SPACE = re.compile(r"(?<=[^\x00-\x7f]) +(?=[^\x00-\x7f])")
-# Where a description is split: 【注意】 style headings, and the older
-# 「初期状態: … 完了状態: … 次の周を始める前に、…」 and English
-# "Initial state: … Done when … Before repeating …" markers. "Before
-# repeating" is a lookahead, so it stays in the section's text.
+# Where a description is split, whatever the UI's language: 【注意】 style
+# headings, and the older 「初期状態: … 完了状態: … 次の周を始める前に、…」
+# and English "Initial state: … Done when … Before repeating …" markers.
+# "Before repeating" is a lookahead, so it stays in the section's text.
 _DESCRIPTION_HEADING = re.compile(
     r"【(?P<bracket>[^】]+)】"
     r"|(?P<marker>初期状態|完了状態|Initial state)\s*[:：]"
@@ -627,20 +663,21 @@ _DESCRIPTION_HEADING = re.compile(
     r"|\b(?P<done_en>Done when)\s+"
     r"|(?=\b(?P<reset_en>Before repeating)\b)"
 )
-# heading -> (label shown, kind). The kind colours the section: "warn" must
-# not be missed, "setup" is how the scene starts, "done" is when to stop,
-# "reset" is for between rounds. Unlisted 【…】 headings show as they are.
+# heading -> (key of the label shown, kind). The kind colours the section:
+# "warn" must not be missed, "setup" is how the scene starts, "done" is when
+# to stop, "reset" is for between rounds. Unlisted 【…】 headings show as
+# they are.
 _DESCRIPTION_KINDS = {
-    "注意": ("注意", "warn"),
-    "スキップ": ("スキップ", "warn"),
-    "準備": ("準備", "setup"),
-    "初期状態": ("開始時", "setup"),
-    "Initial state": ("開始時", "setup"),
-    "完了": ("完了", "done"),
-    "完了状態": ("完了条件", "done"),
-    "Done when": ("完了条件", "done"),
-    "次の周を始める前に": ("次の周の前に", "reset"),
-    "Before repeating": ("次の周の前に", "reset"),
+    "注意": ("heading_caution", "warn"),
+    "スキップ": ("heading_skip", "warn"),
+    "準備": ("heading_prepare", "setup"),
+    "初期状態": ("heading_initial", "setup"),
+    "Initial state": ("heading_initial", "setup"),
+    "完了": ("heading_done", "done"),
+    "完了状態": ("heading_done_when", "done"),
+    "Done when": ("heading_done_when", "done"),
+    "次の周を始める前に": ("heading_reset", "reset"),
+    "Before repeating": ("heading_reset", "reset"),
 }
 
 
@@ -667,10 +704,14 @@ def split_description(text):
     if heading or body:
         sections.append((heading, body))
     if sections and sections[0][0] is None and "【" not in text:
-        sections[0] = ("初期状態", sections[0][1])
+        sections[0] = ("Initial state", sections[0][1])
     result = []
     for heading, body in sections:
-        label, kind = _DESCRIPTION_KINDS.get(heading, (heading or "", ""))
+        if heading in _DESCRIPTION_KINDS:
+            key, kind = _DESCRIPTION_KINDS[heading]
+            label = t(key)
+        else:
+            label, kind = heading or "", ""
         if heading == "Done when" and body:
             body = body[0].upper() + body[1:]
         result.append({"heading": label, "text": body, "kind": kind})
@@ -858,6 +899,9 @@ def _root(request: Request):
         request=request,
         name="root.html",
         context={
+            "language": language,
+            # The text the scripts build on the page (TEXT in root.html).
+            "messages": messages,
             "state": state,
             "state_version": state_version,
             "manual": manual,
@@ -872,7 +916,9 @@ def _root(request: Request):
             # blink out until /arm-health's first snapshot.
             "lifter_present": _lifter_present(),
             "lifter_controls": _lifter_controls_enabled(),
-            "launcher_session_id_json": json.dumps(os.getenv("LAUNCHER_SESSION_ID") or ""),
+            "launcher_session_id_json": json.dumps(
+                os.getenv("LAUNCHER_SESSION_ID") or ""
+            ),
         },
     )
 
@@ -944,7 +990,9 @@ def _lifter(direction: str):
     if direction != "stop" and not _lifter_controls_enabled():
         return JSONResponse({"accepted": False, "reason": "not-ker"}, status_code=409)
     if direction != "stop" and state.collecting:
-        return JSONResponse({"accepted": False, "reason": "collecting"}, status_code=409)
+        return JSONResponse(
+            {"accepted": False, "reason": "collecting"}, status_code=409
+        )
     _command_lifter(direction)
     return {"accepted": True}
 
@@ -1095,7 +1143,7 @@ async def _cameras(websocket: WebSocket):
     Every CAMERA_VIEW_STATUS_INTERVAL_S a text message carries
     _camera_view_status() as JSON for every camera, including those not
     shown, so the other views' buttons can warn about a dead camera; it
-    alone decides 映像なし.
+    alone decides No signal.
 
     One socket carries every camera: the page already holds five SSE
     streams, and one MJPEG stream per camera would exhaust the browser's six
@@ -1160,9 +1208,9 @@ def load_manual(path):
 
     The file is YAML:
 
-        title: 操作マニュアル
+        title: Operation manual
         sections:
-          - title: アームの同期手順
+          - title: Aligning the arms
             steps: ["...", "..."]
             note: "..."
     """
@@ -1170,15 +1218,15 @@ def load_manual(path):
         return None
     path = pathlib.Path(path)
     if not path.exists():
-        _record_error("ui", f"操作マニュアルが見つかりません: {path}")
+        _record_error("ui", t("manual_not_found", path=path))
         return None
     try:
         loaded = load_yaml(path)
     except yaml.YAMLError as error:
-        _record_error("ui", f"操作マニュアルを読み込めません: {error}")
+        _record_error("ui", t("manual_unreadable", error=error))
         return None
     if not isinstance(loaded, dict) or not loaded.get("sections"):
-        _record_error("ui", f"操作マニュアルに sections がありません: {path}")
+        _record_error("ui", t("manual_no_sections", path=path))
         return None
     return loaded
 
@@ -1206,9 +1254,7 @@ async def _main_dora(server):
         elif event["type"] == "INPUT_CLOSED":
             # A node that ends while we are still running has died.
             _record_error(
-                "dora",
-                f"入力 {_event_field(event, 'id', '?')} が停止しました"
-                "（ノードが終了した可能性があります）",
+                "dora", t("input_stopped", input=_event_field(event, "id", "?"))
             )
             await _notify_state_changed()
         elif event["type"] == "INPUT":
@@ -1346,7 +1392,17 @@ def main():
         help=f"Live camera view rate, 0 to disable ({camera_view_fps:g})",
         type=float,
     )
+    # An option only, not an environment variable, so that the dataflow's
+    # `args:` alone sets the language.
+    parser.add_argument(
+        "--language",
+        default=DEFAULT_LANGUAGE,
+        choices=available_languages(),
+        help=f"The language of the UI ({DEFAULT_LANGUAGE})",
+    )
     args = parser.parse_args()
+    # Before anything below records an error in the UI's language.
+    load_messages(args.language)
     camera_view_fps = args.camera_view_fps
     global auto_open
     auto_open = args.auto_open

@@ -1,24 +1,24 @@
-{% set ARM_STATUS_JA = {
-      "stopped": "停止中",
-      "started": "起動済み（未同期）",
-      "aligned": "同期済み"
+{% set ARM_STATUS = {
+      "stopped": t("arm_status_stopped"),
+      "started": t("arm_status_started"),
+      "aligned": t("arm_status_aligned")
     } %}
 <section class="sec">
   <div class="row">
     <div>
-      <div class="label">エピソード</div>
-      <div class="episode mono">{{ state.episode_number }}<a class="error-mark tone" id="error-mark" href="#error-panel" title="エラーを見る"{% if not state.errors %} hidden{% endif %}>⚠</a></div>
+      <div class="label">{{ t("episode") }}</div>
+      <div class="episode mono">{{ state.episode_number }}<a class="error-mark tone" id="error-mark" href="#error-panel" title="{{ t("show_errors") }}"{% if not state.errors %} hidden{% endif %}>⚠</a></div>
     </div>
     {% if state.collecting -%}
-      <div class="status collecting">● 収録中</div>
+      <div class="status collecting">● {{ t("recording") }}</div>
     {% else -%}
-      <div class="status idle">待機中</div>
+      <div class="status idle">{{ t("idle") }}</div>
     {% endif -%}
   </div>
   <div class="note">
-    アーム
-    左 <span class="arm-state {{ state.arm_status_left }}">{{ ARM_STATUS_JA.get(state.arm_status_left, state.arm_status_left) }}</span>
+    {{ t("arm") }}
+    {{ t("left") }} <span class="arm-state {{ state.arm_status_left }}">{{ ARM_STATUS.get(state.arm_status_left, state.arm_status_left) }}</span>
     ·
-    右 <span class="arm-state {{ state.arm_status_right }}">{{ ARM_STATUS_JA.get(state.arm_status_right, state.arm_status_right) }}</span>
+    {{ t("right") }} <span class="arm-state {{ state.arm_status_right }}">{{ ARM_STATUS.get(state.arm_status_right, state.arm_status_right) }}</span>
   </div>
 </section>
