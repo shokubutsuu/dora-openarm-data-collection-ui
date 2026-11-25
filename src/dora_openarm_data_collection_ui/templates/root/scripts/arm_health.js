@@ -5,7 +5,7 @@ const tempClass = (c) =>
 // DISABLED is torque off, not a fault; only the motor's own error
 // codes and a motor that stopped answering are worth a colour.
 const NORMAL_MOTOR_STATUS = ["ENABLED", "DISABLED"];
-const ARM_NAME = { left: "Left", right: "Right" };
+const ARM_NAME = { left: TEXT.arm_left, right: TEXT.arm_right };
 // Joints are named from the data rather than baked into the page. The
 // last axis is always the gripper -- OpenArm's motor count is fixed
 // whether it is driven in POS_FORCE or MIT mode, so this does not
@@ -38,7 +38,7 @@ const setArmRate = (line, side, s) => {
     if (isError) el.classList.add("error");
     else if (s.jitter_ms > ARM_JITTER_WARN_MS) el.classList.add("warn");
   }
-  rateAlert(`arm:${side}:rate`, ARM_NAME[side] + " arm state", s,
+  rateAlert(`arm:${side}:rate`, `${ARM_NAME[side]} ${TEXT.arm_rate}`, s,
     ARM_FPS_ERROR, ARM_JITTER_WARN_MS, ARM_JITTER_ERROR_MS);
 };
 const armHealthSource = new EventSource("/arm-health");
@@ -55,13 +55,13 @@ armHealthSource.onmessage = (e) => {
       clearArmAlerts(side);
       continue;
     }
-    const arm = ARM_NAME[side] + " arm";
+    const arm = ARM_NAME[side];
     setArmRate(line, side, s);
     setBusBadge(line, s.bus);
     const severity = s.bus?.severity;
     setAlert(`arm:${side}:bus`,
       severity === "error" || severity === "warn" ? severity : null,
-      `${arm} CAN bus: ${s.bus?.state}`);
+      `${arm} ${TEXT.can_bus}: ${s.bus?.state}`);
     // Hottest answering motor. A silent motor keeps its last reading
     // in the driver, so that would be a stale value.
     const count = Math.max(s.mos?.length ?? 0, s.motor_status?.length ?? 0);

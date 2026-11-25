@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ language }}">
   <head>
     <meta charset="utf-8">
-    <title>OpenArm data collection</title>
+    <title>{{ t("page_title") }}</title>
     {# The page is split under root/: the left panel and its sections,
        the camera panel, and their styles and scripts. -#}
     <style>
@@ -28,6 +28,8 @@
       const LAUNCHER_URL = "{{ launcher_url }}";
       const LAUNCHER_SESSION_ID = {{ launcher_session_id_json | safe }};
       const STATE_VERSION = {{ state_version }};
+      // The UI's text in its language (see locales/), by key.
+      const TEXT = {{ messages | tojson }};
       const hasServerErrors = {{ "true" if state.errors else "false" }};
 
 {% include "root/scripts/launcher.js" %}

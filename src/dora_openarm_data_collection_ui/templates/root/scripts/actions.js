@@ -33,13 +33,13 @@ async function requestQuit(confirmFirst) {
     return;
   }
   if (window.quitRequestPending) return;
-  if (confirmFirst && !window.confirm("Quit the current data collection?")) return;
+  if (confirmFirst && !window.confirm(TEXT.confirm_quit)) return;
   window.quitRequestPending = true;
   const form = document.getElementById("quit-form");
   if (form) {
     const button = form.querySelector("input[type=submit]");
     if (button) {
-      button.value = "Quitting…";
+      button.value = TEXT.quitting;
       button.disabled = true;
     }
   }
@@ -72,7 +72,7 @@ async function requestQuit(confirmFirst) {
     await new Promise(resolve => setTimeout(resolve, 500));
   }
   document.getElementById("ending-hint").textContent =
-    "Quitting is taking a while. Check the launcher.";
+    TEXT.quitting_slow;
   document.getElementById("ending-actions").hidden = false;
 }
 const quitForm = document.getElementById("quit-form");

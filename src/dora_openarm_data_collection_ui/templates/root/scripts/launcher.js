@@ -30,7 +30,7 @@ async function submitAction(form) {
     location.replace(response.url);
   } catch (error) {
     window.actionPending = false;
-    window.alert("Could not confirm the action. Check the screen.");
+    window.alert(TEXT.action_unconfirmed);
   }
 }
 if (EMBEDDED) {

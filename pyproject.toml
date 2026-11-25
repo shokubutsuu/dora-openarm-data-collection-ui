@@ -57,6 +57,7 @@ where = ["src"]
     "root/styles/*.css",
     "root/scripts/*.js",
 ]
+"dora_openarm_data_collection_ui.locales" = ["*.yaml"]
 
 [tool.ruff.lint]
 extend-select = [

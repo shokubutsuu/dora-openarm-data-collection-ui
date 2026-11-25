@@ -12,6 +12,7 @@ A [dora-rs](https://dora-rs.ai/) node that provides UI for data collection with 
 | `PORT` | `--port` | Port of this UI (default `8000`) |
 | `AUTO_OPEN` | `--auto-open` | Open a Web browser on start |
 | `CAMERA_VIEW_FPS` | `--camera-view-fps` | Rate of the live camera view (default `10`, `0` turns it off) |
+| `UI_LANGUAGE` | `--language` | Language of the UI: `en` (default) or `ja` |
 
 The manual file is:
 
@@ -23,6 +24,18 @@ sections:
     bullets: ["...", "..."]   # unnumbered
     note: "..."               # highlighted warning
 ```
+
+## Languages
+
+The UI's text is in `src/dora_openarm_data_collection_ui/locales/`, one YAML
+file per language, by key. `en.yaml` has every key, and a language falls back
+to it for any key it does not have. To add a language, add `<language>.yaml`
+with the keys translated; `--language` then accepts it.
+
+Tasks in the metadata may carry `prompt_<language>` and
+`description_<language>` (for example `prompt_ja`). They are shown instead of
+`prompt` / `description` in that language. The recorder still writes `prompt`
+to the dataset as its language instruction.
 
 ## Live camera view
 

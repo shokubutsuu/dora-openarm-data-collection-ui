@@ -1,5 +1,5 @@
 <section class="sec">
-  <div class="label">Task <span class="mono">{{ state.task_index }}</span></div>
+  <div class="label">{{ t("task") }} <span class="mono">{{ state.task_index }}</span></div>
   <div class="task-title">{{ state.task_title }}</div>
   {% if state.task_sections -%}
     <div class="task-sections">
@@ -20,7 +20,7 @@
   {% endif -%}
   {% if state.task_reference_videos -%}
     <div class="task-reference">
-      <div class="label">Reference videos</div>
+      <div class="label">{{ t("reference_videos") }}</div>
       <div class="task-reference-videos{{ ' grid' if state.task_reference_videos | length > 1 }}">
         {% for video in state.task_reference_videos -%}
           {# Muted so that the browser lets it autoplay. -#}
@@ -29,6 +29,6 @@
       </div>
     </div>
   {% elif state.task_reference_missing -%}
-    <div class="note">Reference video not found: {{ state.task_reference_missing }}</div>
+    <div class="note">{{ t("reference_video_not_found", video=state.task_reference_missing) }}</div>
   {% endif -%}
 </section>

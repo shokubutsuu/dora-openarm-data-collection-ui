@@ -49,6 +49,37 @@ import yaml
 base_dir = os.path.dirname(__file__)
 templates = Jinja2Templates(directory=f"{base_dir}/templates")
 
+# The UI's text, one YAML file per language (see --language). English is the
+# default and the fallback for any key another language does not have.
+LOCALES_DIR = pathlib.Path(base_dir) / "locales"
+DEFAULT_LANGUAGE = "en"
+language = DEFAULT_LANGUAGE
+messages: dict[str, str] = {}
+
+
+def available_languages():
+    """Return the languages that have a file under locales/."""
+    return sorted(path.stem for path in LOCALES_DIR.glob("*.yaml"))
+
+
+def load_messages(lang):
+    """Use the given language's text, English where it has none."""
+    global language, messages
+    loaded = load_yaml(LOCALES_DIR / f"{DEFAULT_LANGUAGE}.yaml")
+    if lang != DEFAULT_LANGUAGE:
+        loaded.update(load_yaml(LOCALES_DIR / f"{lang}.yaml") or {})
+    language = lang
+    messages = {key: str(value) for key, value in loaded.items()}
+
+
+def t(key, /, **values):
+    """Return the text for key in the UI's language, {name}s filled in."""
+    text = messages.get(key, key)
+    return text.format(**values) if values else text
+
+
+templates.env.globals["t"] = t
+
 node = None
 
 auto_open = False
@@ -590,12 +621,16 @@ async def _notify_state_changed() -> None:
 
 
 def apply_task(index):
-    """Show the task at the given index."""
+    """Show the task at the given index, in the UI's language when it has one."""
     task = tasks[index]
     state.task_index = index
-    state.task_title = task.get("prompt", "")
+    # prompt_<language> / description_<language> are display only: prompt
+    # stays as it is so the recorded dataset keeps its language instruction.
+    state.task_title = task.get(f"prompt_{language}") or task.get("prompt", "")
     state.task_prompt = task.get("prompt", "")
-    state.task_description = task.get("description", "")
+    state.task_description = task.get(f"description_{language}") or task.get(
+        "description", ""
+    )
     state.task_sections = split_description(state.task_description)
     video = str(task.get("reference_video") or "").strip()
     found = reference_video_files(index)
@@ -614,21 +649,35 @@ def apply_task(index):
     )
 
 
-# Where a description is split: "Initial state: … Done when … Before
-# repeating …" markers. "Before repeating" is a lookahead, so it stays in
-# the section's text.
+# Folded YAML joins Japanese lines with a space: drop spaces between
+# non-ASCII characters.
+_CJK_SPACE = re.compile(r"(?<=[^\x00-\x7f]) +(?=[^\x00-\x7f])")
+# Where a description is split, whatever the UI's language: 【注意】 style
+# headings, and the older 「初期状態: … 完了状態: … 次の周を始める前に、…」
+# and English "Initial state: … Done when … Before repeating …" markers.
+# "Before repeating" is a lookahead, so it stays in the section's text.
 _DESCRIPTION_HEADING = re.compile(
-    r"(?P<marker>Initial state)\s*:"
+    r"【(?P<bracket>[^】]+)】"
+    r"|(?P<marker>初期状態|完了状態|Initial state)\s*[:：]"
+    r"|(?P<reset_ja>次の周を始める前に)[、,]?"
     r"|\b(?P<done_en>Done when)\s+"
     r"|(?=\b(?P<reset_en>Before repeating)\b)"
 )
-# heading -> (label shown, kind). The kind colours the section: "setup" is
-# how the scene starts, "done" is when to stop, "reset" is for between
-# rounds.
+# heading -> (key of the label shown, kind). The kind colours the section:
+# "warn" must not be missed, "setup" is how the scene starts, "done" is when
+# to stop, "reset" is for between rounds. Unlisted 【…】 headings show as
+# they are.
 _DESCRIPTION_KINDS = {
-    "Initial state": ("Initial state", "setup"),
-    "Done when": ("Done when", "done"),
-    "Before repeating": ("Before the next round", "reset"),
+    "注意": ("heading_caution", "warn"),
+    "スキップ": ("heading_skip", "warn"),
+    "準備": ("heading_prepare", "setup"),
+    "初期状態": ("heading_initial", "setup"),
+    "Initial state": ("heading_initial", "setup"),
+    "完了": ("heading_done", "done"),
+    "完了状態": ("heading_done_when", "done"),
+    "Done when": ("heading_done_when", "done"),
+    "次の周を始める前に": ("heading_reset", "reset"),
+    "Before repeating": ("heading_reset", "reset"),
 }
 
 
@@ -640,7 +689,7 @@ def split_description(text):
     first heading is a section without a heading, except in the older
     marker style, where it is the initial state.
     """
-    text = " ".join(str(text or "").split())
+    text = _CJK_SPACE.sub("", " ".join(str(text or "").split()))
     sections = []
     heading, start = None, 0
     for match in _DESCRIPTION_HEADING.finditer(text):
@@ -654,11 +703,15 @@ def split_description(text):
     body = text[start:].strip()
     if heading or body:
         sections.append((heading, body))
-    if sections and sections[0][0] is None:
+    if sections and sections[0][0] is None and "【" not in text:
         sections[0] = ("Initial state", sections[0][1])
     result = []
     for heading, body in sections:
-        label, kind = _DESCRIPTION_KINDS.get(heading, (heading or "", ""))
+        if heading in _DESCRIPTION_KINDS:
+            key, kind = _DESCRIPTION_KINDS[heading]
+            label = t(key)
+        else:
+            label, kind = heading or "", ""
         if heading == "Done when" and body:
             body = body[0].upper() + body[1:]
         result.append({"heading": label, "text": body, "kind": kind})
@@ -846,6 +899,9 @@ def _root(request: Request):
         request=request,
         name="root.html",
         context={
+            "language": language,
+            # The text the scripts build on the page (TEXT in root.html).
+            "messages": messages,
             "state": state,
             "state_version": state_version,
             "manual": manual,
@@ -1162,15 +1218,15 @@ def load_manual(path):
         return None
     path = pathlib.Path(path)
     if not path.exists():
-        _record_error("ui", f"Operation manual not found: {path}")
+        _record_error("ui", t("manual_not_found", path=path))
         return None
     try:
         loaded = load_yaml(path)
     except yaml.YAMLError as error:
-        _record_error("ui", f"Cannot read the operation manual: {error}")
+        _record_error("ui", t("manual_unreadable", error=error))
         return None
     if not isinstance(loaded, dict) or not loaded.get("sections"):
-        _record_error("ui", f"The operation manual has no sections: {path}")
+        _record_error("ui", t("manual_no_sections", path=path))
         return None
     return loaded
 
@@ -1198,9 +1254,7 @@ async def _main_dora(server):
         elif event["type"] == "INPUT_CLOSED":
             # A node that ends while we are still running has died.
             _record_error(
-                "dora",
-                f"Input {_event_field(event, 'id', '?')} stopped"
-                " (its node may have exited)",
+                "dora", t("input_stopped", input=_event_field(event, "id", "?"))
             )
             await _notify_state_changed()
         elif event["type"] == "INPUT":
@@ -1338,7 +1392,15 @@ def main():
         help=f"Live camera view rate, 0 to disable ({camera_view_fps:g})",
         type=float,
     )
+    parser.add_argument(
+        "--language",
+        default=os.getenv("UI_LANGUAGE") or DEFAULT_LANGUAGE,
+        choices=available_languages(),
+        help=f"The language of the UI ({DEFAULT_LANGUAGE})",
+    )
     args = parser.parse_args()
+    # Before anything below records an error in the UI's language.
+    load_messages(args.language)
     camera_view_fps = args.camera_view_fps
     global auto_open
     auto_open = args.auto_open

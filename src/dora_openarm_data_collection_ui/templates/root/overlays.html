@@ -1,18 +1,18 @@
-<div id="cooldown-toast" class="cooldown-toast">Recording has just started; wait a moment before pressing</div>
+<div id="cooldown-toast" class="cooldown-toast">{{ t("cooldown") }}</div>
 <div class="overlay" id="connection-lost">
-  <div class="title">⚠ Data collection stopped</div>
+  <div class="title">⚠ {{ t("connection_lost_title") }}</div>
   <div class="hint">
-    This screen lost its connection to the data collection. It may have crashed.<br>
-    Go back to the launcher and check what happened.
+    {{ t("connection_lost_hint") }}<br>
+    {{ t("connection_lost_action") }}
   </div>
-  <a class="btn" href="{{ launcher_url }}">Back to the launcher</a>
+  <a class="btn" href="{{ launcher_url }}">{{ t("back_to_launcher") }}</a>
 </div>
 <div class="overlay" id="ending-panel">
-  <div class="title">Quitting…</div>
+  <div class="title">{{ t("quitting") }}</div>
   <div class="hint" id="ending-hint">
-    Saving the recorded data, then going back to the menu. Please wait.
+    {{ t("ending_hint") }}
   </div>
   <div id="ending-actions" hidden>
-    <a class="btn" href="{{ launcher_url }}">Check the launcher</a>
+    <a class="btn" href="{{ launcher_url }}">{{ t("check_launcher") }}</a>
   </div>
 </div>
